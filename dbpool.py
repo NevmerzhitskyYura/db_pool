@@ -1,5 +1,6 @@
 import threading
 import time
+from contextlib import contextmanager
 
 import psycopg2
 
@@ -23,7 +24,7 @@ class DataBasePool(object):
         self.lock = threading.RLock()
 
     def _create_connection(self):
-        connection = psycopg2.connect(**dbs)
+        connection = psycopg2.connect(dbname=self._db_name, user=self._user, password=self._password, host=self._host)
         return {'connection': connection,
                 'creation_date': time.time()}
 
@@ -40,7 +41,9 @@ class DataBasePool(object):
             time.sleep(pool_delay)
         return connection
 
+    @contextmanager
     def manager(self):
+
         with self.lock:
             connection = self._get_connection()
 
@@ -55,10 +58,3 @@ class DataBasePool(object):
 def pool_manager():
     pool_instance = DataBasePool(**dbs, pool_size=10, ttl=1)
     return pool_instance
-
-
-with pool_manager().manager() as conn:
-    cursor = conn.cursor()
-    query = "select * from "
-
-

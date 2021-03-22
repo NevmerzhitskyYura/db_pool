@@ -1,1 +1,1 @@
-db_settings = {'dbname': 'database', 'user': 'db_user', 'password': 'mypassword', 'host': 'localhost', 'port': 5432}
+db_settings = {'dbname': 'postgres', 'user': 'postgres', 'password': 'postgres', 'host': 'localhost', 'port': 5432}
