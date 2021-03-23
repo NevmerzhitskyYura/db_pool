@@ -1,4 +1,4 @@
-import multiprocessing
+import threading
 import unittest
 
 import psycopg2
@@ -7,7 +7,7 @@ import dbpool as db
 
 
 def create_user():
-    with db.pool_manager().manager() as conn:
+    with db.pool_manager() as conn:
         cursor = conn.cursor()
         query = "INSERT INTO todolist_todolist (name, description) VALUES ('List1', 'About');"
         cursor.execute(query)
@@ -26,26 +26,26 @@ def create_without_pool():
 
 class UserTest(unittest.TestCase):
     # def test1(self):
-    #     for _ in range(1000):
+    #     for _ in range(100):
     #         create_user()
 
     # def test2(self):
-    #     for _ in range(1000):
+    #     for _ in range(100):
     #         create_without_pool()
 
-    def test3(self):
-        processes = [multiprocessing.Process(target=create_user) for _ in range(1000)]
-        for process in processes:
-            process.start()
-        for process in processes:
-            process.join()
-
-    # def test4(self):
-    #     processes = [multiprocessing.Process(target=create_without_pool) for _ in range(1000)]
+    # def test3(self):
+    #     processes = [threading.Thread(target=create_user) for _ in range(1000)]
     #     for process in processes:
     #         process.start()
     #     for process in processes:
     #         process.join()
+
+    def test4(self):
+        processes = [threading.Thread(target=create_without_pool) for _ in range(1000)]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join()
 
 
 if __name__ == "__main__":
