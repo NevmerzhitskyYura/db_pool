@@ -26,26 +26,26 @@ def create_without_pool():
 
 class UserTest(unittest.TestCase):
     # def test1(self):
-    #     for _ in range(100):
+    #     for _ in range(1000):
     #         create_user()
 
     # def test2(self):
-    #     for _ in range(100):
+    #     for _ in range(1000):
     #         create_without_pool()
 
-    # def test3(self):
-    #     processes = [multiprocessing.Process(target=create_user) for _ in range(1000)]
-    #     for process in processes:
-    #         process.start()
-    #     for process in processes:
-    #         process.join()
-
-    def test4(self):
-        processes = [multiprocessing.Process(target=create_without_pool) for _ in range(1000)]
+    def test3(self):
+        processes = [multiprocessing.Process(target=create_user) for _ in range(1000)]
         for process in processes:
             process.start()
         for process in processes:
             process.join()
+
+    # def test4(self):
+    #     processes = [multiprocessing.Process(target=create_without_pool) for _ in range(1000)]
+    #     for process in processes:
+    #         process.start()
+    #     for process in processes:
+    #         process.join()
 
 
 if __name__ == "__main__":

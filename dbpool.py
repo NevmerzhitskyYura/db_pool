@@ -1,29 +1,27 @@
+import logging
 import threading
 import time
 from contextlib import contextmanager
-import logging
-
 import psycopg2
 
 from db_settings import db_settings as dbs
 
-pool_delay = 0.01
+pool_delay = 0.1
 
-#logging.basicConfig(level=logging.INFO, filename='dbpool.txt', filemode='w', format='%(message)s')
+# logging.basicConfig(level=logging.INFO, filename='dbpool.txt', filemode='w', format='%(message)s')
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
 class DataBasePool(object):
-    def __init__(self, dbname, user, password, host, port, pool_size, ttl):
+    def __init__(self, dbname, user, password, host, port, pool_size):
         self._db_name = dbname
         self._user = user
         self._password = password
         self._host = host
         self._port = port
 
-        self._connection_pool = []
         self._pool_size = pool_size
-        self.connection_ttl = ttl
+        self._connection_pool = [self._create_connection() for _ in range(self._pool_size)]
         self.lock = threading.RLock()
         self.logging = logging.getLogger('dbpool')
         self.logging.info("Create new pool")
@@ -35,7 +33,6 @@ class DataBasePool(object):
 
     def _create_connection(self):
         connection = psycopg2.connect(dbname=self._db_name, user=self._user, password=self._password, host=self._host)
-
         return {'connection': connection,
                 'creation_date': time.time()}
 
@@ -46,13 +43,13 @@ class DataBasePool(object):
     def _get_connection(self):
         connection = None
         while not connection:
-            if self._connection_pool:
+
+            try:
                 connection = self._connection_pool.pop()
                 logging.info(f'Get connection from pool with id {id(connection)}')
-            elif len(self._connection_pool) < self._pool_size:
-                connection = self._create_connection()
-                self.logging.info(f"Create connection with id {id(connection)}")
-            time.sleep(pool_delay)
+            except:
+                time.sleep(pool_delay)
+                self.logging.info(f"Poll don't have available connection. Please wait.")
         return connection
 
     @contextmanager
@@ -61,21 +58,21 @@ class DataBasePool(object):
         with self.lock:
             connection = self._get_connection()
 
-        yield connection['connection']
+        try:
+            yield connection['connection']
+        except:
+            with self.lock:
+                connection = self._get_connection()
 
-
-        if connection['creation_date'] + self.connection_ttl > time.time():
-            self._push_to_pull(connection)
-        else:
-            self._close_connection(connection)
+        self._push_to_pull(connection)
 
     def _push_to_pull(self, connection):
         self.logging.info(f'Push to the pull connetion with {id(connection)}')
         self._connection_pool.append(connection)
 
+
 def pool_manager():
     return pool_instance
 
 
-pool_instance= DataBasePool(**dbs, pool_size=10, ttl=0.015)
-
+pool_instance = DataBasePool(**dbs, pool_size=10)
