@@ -1,6 +1,6 @@
 import logging
-import threading
 import time
+from queue import Queue
 
 import psycopg2
 
@@ -10,8 +10,6 @@ pool_delay = 0.1
 
 # logging.basicConfig(level=logging.INFO, filename='dbpool.txt', filemode='w', format='%(message)s')
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-
-count = 0
 
 
 class DataBasePool:
@@ -23,25 +21,18 @@ class DataBasePool:
         self._port = port
 
         self._pool_size = pool_size
-        self._connection_pool = [self._create_connection() for _ in range(self._pool_size)]
-        self.lock = threading.RLock()
+        self._connection_pool = Queue(maxsize=self._pool_size)
+        for _ in range(self._pool_size):
+            self._connection_pool.put(self._create_connection())
+
         self.logging = logging.getLogger('dbpool')
         self.logging.info("Create new pool")
-        self.active_connection = []
 
     def __del__(self):
         self.logging.info('Close all connections in pool')
-        for connection in self._connection_pool:
-            self._close_connection(connection)
-
-    def __enter__(self):
-        with self.lock:
-            conn = self._get_connection()
-            self.active_connection.append(conn)
-        return conn
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._push_to_pull(self.active_connection.pop(0))
+        while not self._connection_pool.empty():
+            conn = self._connection_pool.get()
+            self._close_connection(conn)
 
     def _create_connection(self):
         connection = psycopg2.connect(dbname=self._db_name, user=self._user, password=self._password, host=self._host)
@@ -54,22 +45,35 @@ class DataBasePool:
     def _get_connection(self):
         connection = None
         while not connection:
-            try:
-                connection = self._connection_pool.pop()
+            if not self._connection_pool.empty():
+                connection = self._connection_pool.get()
                 logging.info(f'Get connection from pool with id {id(connection)}')
-                self.logging.info(f'{[id(x) for x in self._connection_pool]}')
-            except:
+            else:
                 time.sleep(pool_delay)
                 self.logging.info(f"Poll don't have available connection. Please wait.")
         return connection
 
-    def _push_to_pull(self, connection):
-        self.logging.info(f'Push to the pull connetion with id {id(connection)}')
-        self._connection_pool.append(connection)
 
+class Call():
+    def __init__(self, conn, pool):
+        self.conn = conn
+        self.pool = pool
+        self.logging = logging.getLogger('dbpool2')
+        self.logging.info('Initialize call')
+
+    def __enter__(self):
+        self.logging.info('Enter')
+        self.logging.info(f'Pool size after enter {self.pool.qsize()}')
+        return self.conn
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.logging.info('Exit')
+
+        self.pool.put(self.conn)
+        self.logging.info(f'Pool size after exit {self.pool.qsize()}')
+
+
+pool_instance = DataBasePool(**dbs, pool_size=5)
 
 def pool_manager():
-    return pool_instance
-
-
-pool_instance = DataBasePool(**dbs, pool_size=50)
+    return Call(pool_instance._get_connection(), pool_instance._connection_pool)
